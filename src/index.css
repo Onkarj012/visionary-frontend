@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@layer utilities {  
+  .text-gradient {
+    @apply bg-gradient-to-r from-[#3e1d8f] via-[#846de3] to-[#e1dcfc] bg-clip-text text-transparent;
+  }
+
+  .icon-gradient {
+    @apply bg-gradient-to-r from-[#3e1d8f] via-[#846de3] to-[#e1dcfc] bg-clip-text text-transparent;
+    fill: currentColor; /* for Lucide icons */
+    stroke: none;       /* disables outline stroke */
+  }
+
+  .bg-indigo-sky {
+    background: linear-gradient(
+      135deg,
+      #3e1d8f 0%,
+      #5a3abd 30%,
+      #846de3 55%,
+      #b5a7f4 80%,
+      #e1dcfc 100%
+    );
+  }
+
+  .gradient-border {
+    border: 2px solid transparent;
+    background: linear-gradient(#0d0d0d, #0d0d0d) padding-box,
+                linear-gradient(135deg,
+                  #3e1d8f 0%,
+                  #5a3abd 30%,
+                  #846de3 55%,
+                  #b5a7f4 80%,
+                  #e1dcfc 100%
+                ) border-box;
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+  }
+
+  .gradient-border:hover {
+    box-shadow: 0 0 20px rgba(132, 109, 227, 0.5), 
+                0 0 40px rgba(90, 58, 189, 0.3);
+    
+  }
+  .dialog-overlay {
+    @apply fixed inset-0 z-40 bg-black/70 backdrop-blur-sm;
+  }
+
+  /* Card surface — lighter with border so it stands out */
+  .dialog-surface {
+    @apply bg-[#111111]/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-[#846de3]/40;
+  }
+
+  /* Animations */
+
+
+  /* Close button */
+  .dialog-close-btn {
+    @apply absolute top-4 right-4 p-2 rounded-full bg-gradient-to-r 
+           from-[#3e1d8f] to-[#846de3] text-white shadow-md opacity-90 
+           transition hover:opacity-100 hover:scale-105;
+  }
+
+  /* Title gradient */
+  .dialog-title-gradient {
+    @apply bg-gradient-to-r from-[#3e1d8f] via-[#846de3] to-[#e1dcfc] 
+           bg-clip-text text-transparent;
+  }
+}
