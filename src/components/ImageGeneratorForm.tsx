@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Split from "react-split";
 import { GradientBorderCard } from "@/components/GradientBorderCard";
 import {
@@ -10,45 +10,81 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { ChevronRightIcon, CheckIcon, Eye, EyeClosed } from "lucide-react";
+
 import {
-  ChevronRightIcon,
-  CheckIcon,
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+  getModels,
+  getLoras,
+  generateImage,
+  type ApiModel,
+  type ApiLora,
+} from "../services/api";
+
+type SelectedLora = { name: string; strength: number };
 
 export default function ImageGeneratorForm() {
-  const [selectedModel, setSelectedModel] = useState("SDXL 1.0");
+  const [selectedModel, setSelectedModel] = useState<string>("");
   const [showNegative, setShowNegative] = useState(true);
 
-  const models = [
-    { name: "SDXL 1.0" },
-    { name: "SDXL 2.0" },
-    { name: "SDXL 3.0" },
-  ];
+  const [models, setModels] = useState<ApiModel[]>([]);
+  const [availableLoras, setAvailableLoras] = useState<ApiLora[]>([]);
 
-  const availableLoras = [
-    { name: "FaceEnhance LoRA" },
-    { name: "AnimeStyle LoRA" },
-    { name: "BackgroundBlur LoRA" },
-    { name: "PortraitSharp LoRA" },
-    { name: "LightingFX LoRA" },
-  ];
+  const [selectedLoras, setSelectedLoras] = useState<SelectedLora[]>([]);
+  const [prompt, setPrompt] = useState("");
+  const [negativePrompt, setNegativePrompt] = useState("");
 
-  const [selectedLoras, setSelectedLoras] = useState<
-    { name: string; strength: number }[]
-  >([
-    { name: "FaceEnhance LoRA", strength: 1.0 },
-    { name: "AnimeStyle LoRA", strength: 0.8 },
-  ]);
+  const [width, setWidth] = useState(512);
+  const [height, setHeight] = useState(512);
+  const [steps, setSteps] = useState(30);
+  const [cfgScale, setCfgScale] = useState(7);
+  const [batchSize, setBatchSize] = useState(1);
+  const [seed, setSeed] = useState(Math.floor(Math.random() * 100000));
+
+  const [loading, setLoading] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [m, l] = await Promise.all([getModels(), getLoras()]);
+
+        setModels(m);
+        setAvailableLoras(l);
+
+        if (m.length > 0) setSelectedModel(m[0].model_name);
+      } catch (err) {
+        setError("Failed to fetch models or LoRAs.");
+        console.error("Fetch error:", err);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const toggleLora = (loraName: string) => {
     setSelectedLoras((prev) => {
       const exists = prev.find((l) => l.name === loraName);
+      console.log(
+        "Current selected:",
+        prev.map((l) => l.name),
+        "Exists:",
+        exists
+      );
       if (exists) {
-        return prev.filter((l) => l.name !== loraName);
+        const filtered = prev.filter((l) => l.name !== loraName);
+        console.log(
+          "Removing, new state:",
+          filtered.map((l) => l.name)
+        );
+        return filtered;
       } else {
-        return [...prev, { name: loraName, strength: 1.0 }];
+        const newState = [...prev, { name: loraName, strength: 1.0 }];
+        console.log(
+          "Adding, new state:",
+          newState.map((l) => l.name)
+        );
+        return newState;
       }
     });
   };
@@ -59,6 +95,58 @@ export default function ImageGeneratorForm() {
       setSelectedLoras((prev) =>
         prev.map((l, i) => (i === index ? { ...l, strength: num } : l))
       );
+    }
+  };
+
+  const randomizeSeed = () => {
+    setSeed(Math.floor(Math.random() * 100000));
+  };
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError(null);
+    setGeneratedImage(null);
+
+    try {
+      const requestData = {
+        prompt,
+        ...(negativePrompt && { negative_prompt: negativePrompt }),
+        ...(selectedModel && { model: selectedModel }),
+        ...(selectedLoras.length > 0 && {
+          loras: selectedLoras.map((lora) => ({
+            name: lora.name,
+            strength: lora.strength,
+          })),
+        }),
+        width,
+        height,
+        steps,
+        ...(cfgScale && { cfg_scale: cfgScale }),
+        ...(seed && { seed }),
+        ...(batchSize && { batch_size: batchSize }),
+      };
+
+      const data = await generateImage(requestData);
+
+      if (data?.images && data.images.length > 0) {
+        const imageData = data.images[0];
+
+        // Check if it's already a data URL or needs base64 prefix
+        if (imageData.startsWith("data:image/")) {
+          setGeneratedImage(imageData);
+        } else {
+          // If it's just base64, add the prefix
+          setGeneratedImage(`data:image/png;base64,${imageData}`);
+        }
+      } else {
+        console.error("No images in response:", data);
+        setError("No image returned from server. Check console for details.");
+      }
+    } catch (err) {
+      setError("Image generation failed.");
+      console.error("Generation error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -77,16 +165,21 @@ export default function ImageGeneratorForm() {
           <div className="space-y-6">
             {/* Model Selector */}
             <GradientBorderCard
-              label={<span className="text-gradient">Model Selector</span>}
+              label={
+                <span className="text-gradient font-semibold mb-3 text-sm uppercase tracking-wide">
+                  Model Selector
+                </span>
+              }
               content={
                 <div className="space-y-6">
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button
                         variant="outline"
-                        className="w-full justify-between border-input text-text hover:border-accent hover:text-accent transition"
+                        disabled={loading}
+                        className="w-full justify-between border-input text-foreground hover:border-accent hover:text-accent transition"
                       >
-                        {selectedModel}
+                        {selectedModel || "Select Model"}
                         <ChevronRightIcon className="ml-2 h-4 w-4 text-accent" />
                       </Button>
                     </DialogTrigger>
@@ -102,21 +195,22 @@ export default function ImageGeneratorForm() {
                       <div className="grid grid-cols-2 gap-3 mt-4">
                         {models.map((model) => (
                           <Button
-                            key={model.name}
+                            key={model.model_name}
                             variant={
-                              selectedModel === model.name
+                              selectedModel === model.model_name
                                 ? "default"
                                 : "outline"
                             }
-                            onClick={() => setSelectedModel(model.name)}
+                            onClick={() => setSelectedModel(model.model_name)}
+                            disabled={loading}
                             className={`justify-between transition ${
-                              selectedModel === model.name
+                              selectedModel === model.model_name
                                 ? "bg-accent text-white shadow-md"
-                                : "border-input text-text hover:border-accent hover:text-accent"
+                                : "border-input text-foreground hover:border-accent hover:text-accent"
                             }`}
                           >
-                            {model.name}
-                            {selectedModel === model.name && (
+                            {model.model_name}
+                            {selectedModel === model.model_name && (
                               <CheckIcon className="h-4 w-4" />
                             )}
                           </Button>
@@ -127,14 +221,15 @@ export default function ImageGeneratorForm() {
 
                   {/* LoRA Selector */}
                   <div>
-                    <h3 className="text-primary font-semibold mb-3 text-sm uppercase tracking-wide">
+                    <h3 className="text-gradient font-semibold mb-3 text-sm uppercase tracking-wide">
                       LoRA Selector
                     </h3>
                     <Dialog>
                       <DialogTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full justify-between border-input text-text hover:border-accent hover:text-accent transition"
+                          disabled={loading}
+                          className="w-full justify-between border-input text-foreground hover:border-accent hover:text-accent transition"
                         >
                           Select LoRAs
                           <ChevronRightIcon className="ml-2 h-4 w-4 text-accent" />
@@ -150,25 +245,28 @@ export default function ImageGeneratorForm() {
                             unselect.
                           </DialogDescription>
                         </DialogHeader>
-                        <div className="grid grid-cols-2 gap-3 mt-4">
+                        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-6">
                           {availableLoras.map((lora) => {
+                            const loraName = lora.name;
                             const isSelected = selectedLoras.some(
-                              (sl) => sl.name === lora.name
+                              (sl) => sl.name === loraName
                             );
+
                             return (
                               <Button
-                                key={lora.name}
-                                variant={isSelected ? "default" : "outline"}
-                                onClick={() => toggleLora(lora.name)}
-                                className={`justify-between transition ${
-                                  isSelected
-                                    ? "bg-accent text-white shadow-md"
-                                    : "border-input text-text hover:border-accent hover:text-accent"
-                                }`}
+                                key={loraName}
+                                variant={
+                                  isSelected ? "loraSelected" : "loraUnselected"
+                                }
+                                onClick={() => toggleLora(loraName)}
+                                disabled={loading}
+                                className="flex flex-col items-center justify-center h-24 rounded-xl shadow-md transition group"
                               >
-                                {lora.name}
+                                <span className="truncate text-base font-medium">
+                                  {loraName}
+                                </span>
                                 {isSelected && (
-                                  <CheckIcon className="h-4 w-4" />
+                                  <CheckIcon className="h-5 w-5 mt-2 text-green-400 group-hover:scale-110 transition" />
                                 )}
                               </Button>
                             );
@@ -182,19 +280,22 @@ export default function ImageGeneratorForm() {
                       {selectedLoras.map((lora, index) => (
                         <div
                           key={lora.name}
-                          className="flex items-center justify-between gradient-border rounded-xl p-2.5 bg-[#0d0d0d]/70 backdrop-blur-md transition hover:scale-[1.02]"
+                          className="flex items-center justify-between gradient-border rounded-xl p-2.5 bg-[#0d0d0d]/70 backdrop-blur-md transition "
                         >
-                          <span className="text-sm font-medium text-text">
+                          <span className="text-sm font-medium text-foreground">
                             {lora.name}
                           </span>
                           <input
                             type="number"
                             step="0.1"
+                            min="0"
+                            max="2"
                             value={lora.strength}
+                            disabled={loading}
                             onChange={(e) =>
                               updateStrength(index, e.target.value)
                             }
-                            className="w-16 text-center border border-input rounded-md p-1 bg-background text-text focus:border-accent focus:ring-1 focus:ring-accent outline-none transition"
+                            className="w-16 text-center border border-input rounded-md p-1 bg-background text-foreground focus:border-accent focus:ring-1 focus:ring-accent outline-none transition"
                           />
                         </div>
                       ))}
@@ -203,49 +304,113 @@ export default function ImageGeneratorForm() {
                 </div>
               }
             />
+
+            {/* Image Settings */}
+            <div className="mt-6 text-muted font-medium">Image Settings</div>
+            <div className="space-y-3">
+              <input
+                type="number"
+                value={width}
+                onChange={(e) => setWidth(Number(e.target.value))}
+                disabled={loading}
+                className="w-full border p-2 rounded"
+                placeholder="Width"
+              />
+              <input
+                type="number"
+                value={height}
+                onChange={(e) => setHeight(Number(e.target.value))}
+                disabled={loading}
+                className="w-full border p-2 rounded"
+                placeholder="Height"
+              />
+              <input
+                type="number"
+                value={steps}
+                onChange={(e) => setSteps(Number(e.target.value))}
+                disabled={loading}
+                className="w-full border p-2 rounded"
+                placeholder="Steps"
+              />
+              <input
+                type="number"
+                value={cfgScale}
+                onChange={(e) => setCfgScale(Number(e.target.value))}
+                disabled={loading}
+                className="w-full border p-2 rounded"
+                placeholder="CFG Scale"
+              />
+              <input
+                type="number"
+                value={batchSize}
+                onChange={(e) => setBatchSize(Number(e.target.value))}
+                disabled={loading}
+                className="w-full border p-2 rounded"
+                placeholder="Batch Size"
+              />
+              <div className="flex items-center space-x-2">
+                <input
+                  type="number"
+                  value={seed}
+                  onChange={(e) => setSeed(Number(e.target.value))}
+                  disabled={loading}
+                  className="flex-1 border p-2 rounded"
+                  placeholder="Seed"
+                />
+                <Button
+                  onClick={randomizeSeed}
+                  disabled={loading}
+                  variant="outline"
+                >
+                  Randomize
+                </Button>
+              </div>
+            </div>
           </div>
-          <div className="mt-6 text-muted font-medium">Image Settings</div>
         </div>
 
         {/* Right Panel */}
-        <div className="p-4 bg-background overflow-y-auto">
+        <div className="p-6 bg-background overflow-y-auto space-y-6">
           {/* Unified Prompt Card */}
-          <div className="gradient-border rounded-2xl bg-[#0d0d0d]/70 backdrop-blur-md shadow-lg transition hover:shadow-accent/30 p-4 space-y-6">
+          <div className="gradient-border rounded-2xl bg-[#0d0d0d]/70 backdrop-blur-md shadow-lg transition p-6 space-y-6">
             {/* Positive Prompt */}
-            <div>
-              <label className="block text-gradient text-sm font-semibold mb-2">
+            <div className="space-y-2">
+              <label className="text-gradient font-semibold text-sm uppercase tracking-wide">
                 Positive Prompt
               </label>
               <textarea
                 placeholder="Enter your main prompt..."
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                disabled={loading}
                 className="w-full h-32 p-3 rounded-lg bg-background text-text resize-none border border-input focus:border-accent focus:ring-1 focus:ring-accent outline-none transition"
               />
             </div>
 
             {/* Toggle + Negative Prompt */}
-            <div>
+            <div className="space-y-3">
               <button
                 onClick={() => setShowNegative(!showNegative)}
-                className="text-xs  text-muted hover:text-accent flex items-center gap-1 mb-2 transition"
+                disabled={loading}
+                className="flex items-center justify-center rounded-md border border-input bg-background/50 px-3 py-2 text-xs text-muted-foreground hover:text-accent hover:border-accent hover:bg-accent/10 transition-colors"
               >
                 {showNegative ? (
-                  <>
-                    <ChevronDown size={14} /> Hide Negative Prompt
-                  </>
+                  <EyeClosed className="w-4 h-4" />
                 ) : (
-                  <>
-                    <ChevronRight size={14} /> Show Negative Prompt
-                  </>
+                  <Eye className="w-4 h-4" />
                 )}
               </button>
 
               {showNegative && (
-                <div>
-                  <label className="block text-sm font-semibold text-primary mb-2">
+                <div className="space-y-2">
+                  <label className="text-gradient font-semibold text-sm uppercase tracking-wide">
                     Negative Prompt
                   </label>
                   <textarea
                     placeholder="Enter things to avoid..."
+                    value={negativePrompt}
+                    onChange={(e) => setNegativePrompt(e.target.value)}
+                    disabled={loading}
                     className="w-full h-24 p-3 rounded-lg bg-background text-text resize-none border border-input focus:border-accent focus:ring-1 focus:ring-accent outline-none transition"
                   />
                 </div>
@@ -254,14 +419,38 @@ export default function ImageGeneratorForm() {
 
             {/* Generate Button */}
             <div className="flex justify-end">
-              <Button className="bg-indigo-sky text-white shadow-md hover:shadow-lg hover:bg-accent/90 transition">
-                Generate
+              <Button
+                onClick={handleGenerate}
+                disabled={loading}
+                className="px-6 py-2 bg-indigo-sky text-white shadow-md hover:shadow-lg hover:bg-accent/90 transition rounded-lg"
+              >
+                {loading ? "Generating..." : "Generate"}
               </Button>
             </div>
+            {error && <div className="text-red-500 text-sm">{error}</div>}
           </div>
 
-          {/* Placeholder below for generated output */}
-          <div className="mt-6 text-muted font-medium">Generated Image</div>
+          {/* Generated Output Section */}
+          <div className="gradient-border rounded-2xl bg-[#0d0d0d]/60 backdrop-blur-md shadow-md p-6 space-y-4">
+            <h2 className="text-sm font-semibold text-muted tracking-wide uppercase">
+              Generated Output
+            </h2>
+            <div className="flex items-center justify-center h-64 border border-dashed border-border rounded-xl text-muted-foreground text-sm">
+              {loading && <span>Generating...</span>}
+
+              {!loading && generatedImage && (
+                <img
+                  src={generatedImage}
+                  alt="Generated"
+                  className="max-h-60 rounded-lg shadow-md"
+                />
+              )}
+
+              {!loading && !generatedImage && !error && (
+                <span>Your generated image will appear here!</span>
+              )}
+            </div>
+          </div>
         </div>
       </Split>
     </div>

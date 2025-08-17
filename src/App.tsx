@@ -7,7 +7,7 @@ export default function App() {
       {/* --- Title Section --- */}
       <header className="w-full flex items-center justify-between px-8 py-4 border-b border-gray-800">
         <h1 className="text-2xl font-bold flex items-center gap-2 text-gradient">
-          <WandSparkles className="size-6 icon-gradient" />
+          <WandSparkles className="size-6 text-white" />
           VisioNary
         </h1>
       </header>

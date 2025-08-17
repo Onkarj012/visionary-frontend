@@ -67,8 +67,8 @@ function DialogContent({
       >
         <div
           className={cn(
-            "relative w-full max-w-lg max-h-[90vh] overflow-y-auto",
-            "dialog-surface dialog-animate p-6 focus:outline-none text-gray-200"
+            "relative w-full max-w-5xl max-h-[90vh] overflow-y-auto",
+            "dialog-surface dialog-animate p-8 focus:outline-none text-gray-200"
           )}
         >
           {children}

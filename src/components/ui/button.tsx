@@ -20,6 +20,11 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-accent/10 hover:text-accent text-white active:scale-95",
         link: "text-gradient underline-offset-4 hover:underline font-semibold",
+
+        loraSelected:
+          "bg-indigo-sky text-white shadow-md hover-glow active:scale-95",
+        loraUnselected:
+          "gradient-border text-white hover:text-accent hover:shadow-md active:scale-95",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

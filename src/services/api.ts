@@ -11,7 +11,7 @@ export const getHealth = async () => {
 
 // Types for API responses
 export type ApiModel = { model_name: string };
-export type ApiLora = { lora_name: string };
+export type ApiLora = { name: string; alias: string; path: string; metadata: Record<string, unknown> };
 
 // Get available models
 export const getModels = async (): Promise<ApiModel[]> => {
@@ -28,15 +28,15 @@ export const getLoras = async (): Promise<ApiLora[]> => {
 // Generate image
 export const generateImage = async (params: {
     prompt: string;
-    negative_prompt: string;
-    model: string;
-    loras: { name: string; strength: number }[];
+    negative_prompt?: string;
+    model?: string;
+    loras?: { name: string; strength: number }[];
     width: number;
     height: number;
     steps: number;
-    cfg_scale: number;
-    seed: number;
-    batch_size: number;
+    cfg_scale?: number;
+    seed?: number;
+    batch_size?: number;
 }) => {
     const response = await api.post("/api/generate", params);
     return response.data;
